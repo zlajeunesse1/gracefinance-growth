@@ -13,10 +13,9 @@ from app.clients.twitter import XClient
 from app.config import get_settings
 
 MONTHLY_BUDGET_USD = 5.00
-BUDGET_RESERVE_USD = 0.40
+BUDGET_RESERVE_USD = 0.25
 REPLY_COST_USD = 0.015
-WEEKDAY_REPLY_LIMIT = 5
-WEEKEND_REPLY_LIMIT = 8
+DAILY_REPLY_LIMIT = 5
 
 
 @dataclass
@@ -137,23 +136,12 @@ def import_candidates(path: str, store: ReplyStore) -> int:
     return len(items)
 
 
-def publish_reply(client: XClient, text: str, source_post_id: str) -> dict:
-    if client.settings.dry_run:
-        logger.info("DRY RUN X reply to {}: {}", source_post_id, text)
-        return {"status": "dry_run", "tweet_id": None}
-    response = client._client().create_tweet(text=text, in_reply_to_tweet_id=source_post_id)
-    reply_id = str(response.data["id"])
-    logger.info("Published X reply id={} source={}", reply_id, source_post_id)
-    return {"status": "published", "tweet_id": reply_id}
-
-
 def approve_queue(store: ReplyStore) -> None:
     client = XClient()
-    daily_limit = WEEKEND_REPLY_LIMIT if datetime.now().weekday() >= 5 else WEEKDAY_REPLY_LIMIT
 
-    for row in store.pending(daily_limit):
-        if store.posted_today() >= daily_limit:
-            logger.info("Daily reply limit reached: {}", daily_limit)
+    for row in store.pending(DAILY_REPLY_LIMIT):
+        if store.posted_today() >= DAILY_REPLY_LIMIT:
+            logger.info("Daily reply limit reached: {}", DAILY_REPLY_LIMIT)
             break
 
         projected = store.month_spend() + REPLY_COST_USD
@@ -181,7 +169,7 @@ def approve_queue(store: ReplyStore) -> None:
                 store.mark(row["source_post_id"], "skipped")
                 continue
 
-        result = publish_reply(client, reply_text, row["source_post_id"])
+        result = client.reply(reply_text, row["source_post_id"])
         status = "posted" if result["status"] == "published" else "dry_run"
         store.mark(row["source_post_id"], status, result.get("tweet_id"))
         if status == "posted":
