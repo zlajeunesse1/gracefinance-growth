@@ -22,8 +22,6 @@ class XClient:
         )
 
     def publish(self, text: str) -> dict:
-        if len(text) > 280:
-            raise ValueError(f"X post exceeds 280 characters: {len(text)}")
         if self.settings.dry_run:
             logger.info("DRY RUN X post: {}", text)
             return {"status": "dry_run", "platform": "x", "text": text, "tweet_id": None}
