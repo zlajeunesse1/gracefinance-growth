@@ -11,8 +11,10 @@ def run_metrics_cycle() -> None:
         logger.info("Skipping X metrics cycle | dry_run={} x_ready={}", settings.dry_run, settings.x_ready)
         return
 
-    store = GrowthStore(settings.growth_database_path)
-    campaigns = store.published_without_recent_metrics(limit=settings.metrics_batch_size)
+    database_path = getattr(settings, "growth_database_path", "data/growth.db")
+    batch_size = int(getattr(settings, "metrics_batch_size", 50))
+    store = GrowthStore(database_path)
+    campaigns = store.published_without_recent_metrics(limit=batch_size)
     if not campaigns:
         logger.info("No X campaigns need metrics collection")
         return
