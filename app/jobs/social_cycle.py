@@ -14,7 +14,8 @@ def run_social_cycle(theme: str = "daily") -> None:
 
     settings = get_settings()
     snapshot = GraceFinanceClient().get_index_snapshot()
-    store = GrowthStore(settings.growth_database_path)
+    database_path = getattr(settings, "growth_database_path", "data/growth.db")
+    store = GrowthStore(database_path)
     campaign = GrowthEngine(store=store).generate(snapshot, theme=theme)
 
     logger.info(
