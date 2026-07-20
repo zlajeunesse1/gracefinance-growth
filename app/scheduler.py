@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.jobs.founder_cycle import run_founder_cycle, run_weekly_cycle
 from app.jobs.heartbeat import heartbeat
 from app.jobs.metrics_cycle import run_metrics_cycle
+from app.jobs.reply_discovery_cycle import run_reply_discovery_cycle
 from app.jobs.social_cycle import run_social_cycle
 
 
@@ -48,6 +49,14 @@ def start_scheduler() -> None:
         coalesce=True,
     )
     scheduler.add_job(
+        run_reply_discovery_cycle,
+        CronTrigger(hour=9, minute=30, timezone=settings.timezone),
+        id="daily_x_reply_discovery",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
         run_social_cycle,
         CronTrigger(hour=settings.evening_post_hour, minute=5, timezone=settings.timezone),
         kwargs={"theme": "evening participation"},
@@ -74,5 +83,8 @@ def start_scheduler() -> None:
         coalesce=True,
     )
 
-    logger.info("GraceFinance Signal Engine started | timezone={}", settings.timezone)
+    logger.info(
+        "GraceFinance Signal Engine started | timezone={} cadence=2 daily posts + 5 weekday/8 weekend approved replies",
+        settings.timezone,
+    )
     scheduler.start()
