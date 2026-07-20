@@ -12,6 +12,12 @@ from loguru import logger
 from app.clients.twitter import XClient
 from app.config import get_settings
 
+MONTHLY_BUDGET_USD = 5.00
+BUDGET_RESERVE_USD = 0.40
+REPLY_COST_USD = 0.015
+WEEKDAY_REPLY_LIMIT = 5
+WEEKEND_REPLY_LIMIT = 8
+
 
 @dataclass
 class ReplyCandidate:
@@ -35,8 +41,7 @@ class ReplyStore:
 
     def _init_db(self) -> None:
         with self._connect() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS reply_queue (
                     source_post_id TEXT PRIMARY KEY,
                     source_author TEXT NOT NULL,
@@ -49,10 +54,8 @@ class ReplyStore:
                     decided_at TEXT,
                     posted_at TEXT
                 )
-                """
-            )
-            conn.execute(
-                """
+            """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS x_budget_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     event_type TEXT NOT NULL,
@@ -60,28 +63,24 @@ class ReplyStore:
                     reference_id TEXT,
                     created_at TEXT NOT NULL
                 )
-                """
-            )
+            """)
 
     def add_candidate(self, candidate: ReplyCandidate) -> None:
         with self._connect() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 INSERT OR IGNORE INTO reply_queue
                 (source_post_id, source_author, source_text, reply_text, score, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    candidate.source_post_id,
-                    candidate.source_author,
-                    candidate.source_text,
-                    candidate.reply_text,
-                    candidate.score,
-                    datetime.now(timezone.utc).isoformat(),
-                ),
-            )
+            """, (
+                candidate.source_post_id,
+                candidate.source_author,
+                candidate.source_text,
+                candidate.reply_text,
+                candidate.score,
+                datetime.now(timezone.utc).isoformat(),
+            ))
 
-    def pending(self, limit: int = 10) -> list[sqlite3.Row]:
+    def pending(self, limit: int) -> list[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
                 "SELECT * FROM reply_queue WHERE status='pending' ORDER BY score DESC, created_at ASC LIMIT ?",
@@ -91,14 +90,12 @@ class ReplyStore:
     def mark(self, source_post_id: str, status: str, reply_id: str | None = None) -> None:
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 UPDATE reply_queue
-                SET status=?, reply_id=?, decided_at=?, posted_at=CASE WHEN ?='posted' THEN ? ELSE posted_at END
+                SET status=?, reply_id=?, decided_at=?,
+                    posted_at=CASE WHEN ?='posted' THEN ? ELSE posted_at END
                 WHERE source_post_id=?
-                """,
-                (status, reply_id, now, status, now, source_post_id),
-            )
+            """, (status, reply_id, now, status, now, source_post_id))
 
     def record_cost(self, event_type: str, amount: float, reference_id: str | None = None) -> None:
         with self._connect() as conn:
@@ -129,34 +126,40 @@ class ReplyStore:
 def import_candidates(path: str, store: ReplyStore) -> int:
     payload = json.loads(Path(path).read_text())
     items = payload if isinstance(payload, list) else payload.get("candidates", [])
-    count = 0
     for item in items:
-        candidate = ReplyCandidate(
+        store.add_candidate(ReplyCandidate(
             source_post_id=str(item["source_post_id"]),
             source_author=str(item.get("source_author", "unknown")),
             source_text=str(item["source_text"]),
             reply_text=str(item["reply_text"]),
             score=float(item.get("score", 0)),
-        )
-        store.add_candidate(candidate)
-        count += 1
-    return count
+        ))
+    return len(items)
+
+
+def publish_reply(client: XClient, text: str, source_post_id: str) -> dict:
+    if client.settings.dry_run:
+        logger.info("DRY RUN X reply to {}: {}", source_post_id, text)
+        return {"status": "dry_run", "tweet_id": None}
+    response = client._client().create_tweet(text=text, in_reply_to_tweet_id=source_post_id)
+    reply_id = str(response.data["id"])
+    logger.info("Published X reply id={} source={}", reply_id, source_post_id)
+    return {"status": "published", "tweet_id": reply_id}
 
 
 def approve_queue(store: ReplyStore) -> None:
-    settings = get_settings()
     client = XClient()
-    daily_limit = settings.x_weekend_reply_limit if datetime.now().weekday() >= 5 else settings.x_weekday_reply_limit
+    daily_limit = WEEKEND_REPLY_LIMIT if datetime.now().weekday() >= 5 else WEEKDAY_REPLY_LIMIT
 
-    for row in store.pending(limit=daily_limit):
+    for row in store.pending(daily_limit):
         if store.posted_today() >= daily_limit:
             logger.info("Daily reply limit reached: {}", daily_limit)
             break
 
-        projected = store.month_spend() + settings.x_reply_cost_usd
-        ceiling = settings.x_monthly_budget_usd - settings.x_budget_safety_reserve
+        projected = store.month_spend() + REPLY_COST_USD
+        ceiling = MONTHLY_BUDGET_USD - BUDGET_RESERVE_USD
         if projected > ceiling:
-            logger.warning("Monthly X budget guard stopped replies | projected={} ceiling={}", projected, ceiling)
+            logger.warning("Monthly budget guard stopped replies | projected=${:.3f} ceiling=${:.2f}", projected, ceiling)
             break
 
         print("\nPOST")
@@ -170,6 +173,7 @@ def approve_queue(store: ReplyStore) -> None:
         if choice == "s" or not choice:
             store.mark(row["source_post_id"], "skipped")
             continue
+
         reply_text = row["reply_text"]
         if choice == "e":
             reply_text = input("Edited reply: ").strip()
@@ -177,11 +181,11 @@ def approve_queue(store: ReplyStore) -> None:
                 store.mark(row["source_post_id"], "skipped")
                 continue
 
-        result = client.reply(reply_text, row["source_post_id"])
-        status = "posted" if result.get("status") == "published" else "dry_run"
+        result = publish_reply(client, reply_text, row["source_post_id"])
+        status = "posted" if result["status"] == "published" else "dry_run"
         store.mark(row["source_post_id"], status, result.get("tweet_id"))
         if status == "posted":
-            store.record_cost("reply", settings.x_reply_cost_usd, result.get("tweet_id"))
+            store.record_cost("reply", REPLY_COST_USD, result.get("tweet_id"))
 
 
 def main() -> None:
@@ -191,11 +195,10 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = get_settings()
-    store = ReplyStore(settings.growth_database_path)
+    store = ReplyStore(getattr(settings, "growth_database_path", "data/growth.db"))
 
     if args.import_json:
-        count = import_candidates(args.import_json, store)
-        logger.info("Imported {} reply candidates", count)
+        logger.info("Imported {} reply candidates", import_candidates(args.import_json, store))
     if args.approve:
         approve_queue(store)
     if not args.import_json and not args.approve:
