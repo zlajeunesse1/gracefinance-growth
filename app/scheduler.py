@@ -40,27 +40,9 @@ def start_scheduler() -> None:
         coalesce=True,
     )
     scheduler.add_job(
-        run_social_cycle,
-        CronTrigger(hour=settings.morning_post_hour, minute=5, timezone=settings.timezone),
-        kwargs={"theme": "morning acquisition"},
-        id="morning_x_campaign",
-        replace_existing=True,
-        max_instances=1,
-        coalesce=True,
-    )
-    scheduler.add_job(
         run_reply_discovery_cycle,
         CronTrigger(hour=9, minute=30, timezone=settings.timezone),
         id="daily_x_reply_discovery",
-        replace_existing=True,
-        max_instances=1,
-        coalesce=True,
-    )
-    scheduler.add_job(
-        run_social_cycle,
-        CronTrigger(hour=settings.evening_post_hour, minute=5, timezone=settings.timezone),
-        kwargs={"theme": "evening participation"},
-        id="evening_x_campaign",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
@@ -76,7 +58,7 @@ def start_scheduler() -> None:
     scheduler.add_job(
         run_social_cycle,
         CronTrigger(day_of_week=settings.weekly_post_day, hour=10, minute=15, timezone=settings.timezone),
-        kwargs={"theme": "weekly proprietary index review"},
+        kwargs={"theme": "weekly proprietary index and check-in campaign"},
         id="weekly_x_campaign",
         replace_existing=True,
         max_instances=1,
@@ -84,7 +66,7 @@ def start_scheduler() -> None:
     )
 
     logger.info(
-        "GraceFinance Signal Engine started | timezone={} cadence=2 daily posts + 5 weekday/8 weekend approved replies",
+        "GraceFinance Signal Engine started | timezone={} cadence=1 weekly linked post + up to 5 approved replies daily",
         settings.timezone,
     )
     scheduler.start()
