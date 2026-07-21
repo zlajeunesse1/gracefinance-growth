@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     x_api_secret: str = ""
     x_access_token: str = ""
     x_access_token_secret: str = ""
+    x_bearer_token: str = ""
+    x_username: str = ""
 
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
@@ -33,6 +35,11 @@ class Settings(BaseSettings):
     morning_post_hour: int = 8
     evening_post_hour: int = 18
     weekly_post_day: str = "mon"
+
+    engagement_enabled: bool = True
+    engagement_interval_minutes: int = 120
+    engagement_max_replies: int = 3
+    engagement_database_path: str = "data/engagement.db"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -51,6 +58,10 @@ class Settings(BaseSettings):
                 self.x_access_token_secret,
             ]
         )
+
+    @property
+    def x_discovery_ready(self) -> bool:
+        return bool(self.x_bearer_token and self.x_ready)
 
     @property
     def reddit_ready(self) -> bool:
