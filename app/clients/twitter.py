@@ -62,6 +62,7 @@ class XClient:
                     "source_author": getattr(author, "username", "unknown"),
                     "source_author_id": str(tweet.author_id),
                     "source_text": tweet.text,
+                    "conversation_id": str(tweet.conversation_id) if tweet.conversation_id else None,
                     "created_at": tweet.created_at.isoformat() if tweet.created_at else None,
                     "metrics": dict(tweet.public_metrics or {}),
                     "author_followers": int((getattr(author, "public_metrics", {}) or {}).get("followers_count", 0)),
