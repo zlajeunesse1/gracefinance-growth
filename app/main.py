@@ -8,7 +8,7 @@ from app.jobs.reply_discovery_cycle import run_reply_discovery_cycle
 from app.jobs.social_cycle import run_social_cycle
 from app.logger import configure_logging
 from app.reply_assistant import ReplyStore, approve_queue
-from app.scheduler import start_scheduler
+from app.scheduler import run_autonomous_reply_cycle, start_scheduler
 
 
 def main() -> None:
@@ -18,7 +18,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="GraceFinance deterministic growth employee"
     )
-
     parser.add_argument(
         "--run-once",
         action="store_true",
@@ -33,6 +32,11 @@ def main() -> None:
         "--approve-replies",
         action="store_true",
         help="Review and publish up to five queued X replies",
+    )
+    parser.add_argument(
+        "--auto-approve-replies",
+        action="store_true",
+        help="Discover and publish queued X replies without prompting",
     )
     parser.add_argument(
         "--founder-report",
@@ -52,9 +56,10 @@ def main() -> None:
     args = parser.parse_args()
 
     logger.info(
-        "GraceFinance Growth starting | env={} | dry_run={}",
+        "GraceFinance Growth starting | env={} | dry_run={} | auto_approve_replies={}",
         settings.app_env,
         settings.dry_run,
+        settings.auto_approve_replies,
     )
 
     if args.founder_report:
@@ -63,6 +68,10 @@ def main() -> None:
 
     if args.weekly_report:
         run_weekly_cycle()
+        return
+
+    if args.auto_approve_replies:
+        run_autonomous_reply_cycle()
         return
 
     if args.discover_replies:
