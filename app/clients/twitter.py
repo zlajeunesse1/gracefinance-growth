@@ -47,6 +47,7 @@ class XClient:
             tweet_fields=["author_id", "created_at", "lang", "public_metrics", "conversation_id"],
             expansions=["author_id"],
             user_fields=["username", "name", "public_metrics", "verified"],
+            user_auth=False,
         )
         users = {}
         if response.includes and response.includes.get("users"):
