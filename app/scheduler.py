@@ -4,6 +4,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
 from app.config import get_settings
+from app.jobs.engagement_cycle import run_engagement_cycle
 from app.jobs.founder_cycle import run_founder_cycle, run_weekly_cycle
 from app.jobs.heartbeat import heartbeat
 from app.jobs.metrics_cycle import run_metrics_cycle
@@ -29,6 +30,15 @@ def start_scheduler() -> None:
         replace_existing=True,
         max_instances=1,
         coalesce=True,
+    )
+    scheduler.add_job(
+        run_engagement_cycle,
+        IntervalTrigger(minutes=settings.engagement_interval_minutes),
+        id="x_engagement_cycle",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        next_run_time=None,
     )
     scheduler.add_job(
         run_founder_cycle,
@@ -74,5 +84,10 @@ def start_scheduler() -> None:
         coalesce=True,
     )
 
-    logger.info("GraceFinance Signal Engine started | timezone={}", settings.timezone)
+    logger.info(
+        "GraceFinance Signal Engine started | timezone={} | outreach_every={}m | max_replies={}",
+        settings.timezone,
+        settings.engagement_interval_minutes,
+        settings.engagement_max_replies,
+    )
     scheduler.start()
