@@ -136,7 +136,7 @@ def import_candidates(path: str, store: ReplyStore) -> int:
     return len(items)
 
 
-def approve_queue(store: ReplyStore) -> None:
+def approve_queue(store: ReplyStore, auto_approve: bool = False) -> None:
     client = XClient()
 
     for row in store.pending(DAILY_REPLY_LIMIT):
@@ -147,39 +147,65 @@ def approve_queue(store: ReplyStore) -> None:
         projected = store.month_spend() + REPLY_COST_USD
         ceiling = MONTHLY_BUDGET_USD - BUDGET_RESERVE_USD
         if projected > ceiling:
-            logger.warning("Monthly budget guard stopped replies | projected=${:.3f} ceiling=${:.2f}", projected, ceiling)
+            logger.warning(
+                "Monthly budget guard stopped replies | projected=${:.3f} ceiling=${:.2f}",
+                projected,
+                ceiling,
+            )
             break
-
-        print("\nPOST")
-        print(f"@{row['source_author']}: {row['source_text']}")
-        print("\nSUGGESTED REPLY")
-        print(row["reply_text"])
-        choice = input("\n[A]pprove [E]dit [S]kip [Q]uit: ").strip().lower()
-
-        if choice == "q":
-            break
-        if choice == "s" or not choice:
-            store.mark(row["source_post_id"], "skipped")
-            continue
 
         reply_text = row["reply_text"]
-        if choice == "e":
-            reply_text = input("Edited reply: ").strip()
-            if not reply_text:
+
+        if auto_approve:
+            logger.info(
+                "Auto-publishing X reply | source_post_id={} author=@{} score={:.2f}",
+                row["source_post_id"],
+                row["source_author"],
+                row["score"],
+            )
+        else:
+            print("\nPOST")
+            print(f"@{row['source_author']}: {row['source_text']}")
+            print("\nSUGGESTED REPLY")
+            print(reply_text)
+            choice = input("\n[A]pprove [E]dit [S]kip [Q]uit: ").strip().lower()
+
+            if choice == "q":
+                break
+            if choice == "s" or not choice:
                 store.mark(row["source_post_id"], "skipped")
                 continue
+            if choice == "e":
+                reply_text = input("Edited reply: ").strip()
+                if not reply_text:
+                    store.mark(row["source_post_id"], "skipped")
+                    continue
 
-        result = client.reply(reply_text, row["source_post_id"])
+        try:
+            result = client.reply(reply_text, row["source_post_id"])
+        except Exception:
+            logger.exception(
+                "X reply publishing failed | source_post_id={}",
+                row["source_post_id"],
+            )
+            continue
+
         status = "posted" if result["status"] == "published" else "dry_run"
         store.mark(row["source_post_id"], status, result.get("tweet_id"))
         if status == "posted":
             store.record_cost("reply", REPLY_COST_USD, result.get("tweet_id"))
+            logger.info(
+                "X reply published | source_post_id={} reply_id={}",
+                row["source_post_id"],
+                result.get("tweet_id"),
+            )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="GraceFinance human-approved X reply assistant")
+    parser = argparse.ArgumentParser(description="GraceFinance X reply assistant")
     parser.add_argument("--import-json", help="Import scored reply candidates from JSON")
     parser.add_argument("--approve", action="store_true", help="Review and approve pending replies")
+    parser.add_argument("--auto-approve", action="store_true", help="Publish pending replies without prompting")
     args = parser.parse_args()
 
     settings = get_settings()
@@ -187,9 +213,9 @@ def main() -> None:
 
     if args.import_json:
         logger.info("Imported {} reply candidates", import_candidates(args.import_json, store))
-    if args.approve:
-        approve_queue(store)
-    if not args.import_json and not args.approve:
+    if args.approve or args.auto_approve:
+        approve_queue(store, auto_approve=args.auto_approve)
+    if not args.import_json and not args.approve and not args.auto_approve:
         parser.print_help()
 
 
