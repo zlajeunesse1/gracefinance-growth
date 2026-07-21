@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     x_access_token: str = ""
     x_access_token_secret: str = ""
     x_bearer_token: str = ""
+    auto_approve_replies: bool = False
+    engagement_interval_minutes: int = 60
 
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
