@@ -14,6 +14,7 @@ class XClient:
         if not self.settings.x_ready:
             raise RuntimeError("X credentials are incomplete")
         return tweepy.Client(
+            bearer_token=self.settings.x_bearer_token,
             consumer_key=self.settings.x_api_key,
             consumer_secret=self.settings.x_api_secret,
             access_token=self.settings.x_access_token,
