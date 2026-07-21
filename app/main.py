@@ -2,13 +2,17 @@ import argparse
 
 from loguru import logger
 
+import app.growth_bootstrap  # noqa: F401
 from app.config import get_settings
+from app.growth_engine import (
+    run_allowed_engagement_cycle,
+    run_owned_content_cycle,
+    run_owned_metrics_cycle,
+)
 from app.jobs.founder_cycle import run_founder_cycle, run_weekly_cycle
-from app.jobs.reply_discovery_cycle import run_reply_discovery_cycle
 from app.jobs.social_cycle import run_social_cycle
 from app.logger import configure_logging
-from app.reply_assistant import ReplyStore, approve_queue
-from app.scheduler import run_autonomous_reply_cycle, start_scheduler
+from app.scheduler import start_scheduler
 
 
 def main() -> None:
@@ -16,27 +20,27 @@ def main() -> None:
     settings = get_settings()
 
     parser = argparse.ArgumentParser(
-        description="GraceFinance deterministic growth employee"
+        description="GraceFinance owned-content growth engine"
     )
     parser.add_argument(
         "--run-once",
         action="store_true",
-        help="Run one social publishing cycle and exit",
+        help="Run the legacy social publishing cycle and exit",
     )
     parser.add_argument(
-        "--discover-replies",
+        "--publish-owned",
         action="store_true",
-        help="Find and queue today's strongest organic X reply opportunities",
+        help="Publish one original GraceFinance-owned X post",
     )
     parser.add_argument(
-        "--approve-replies",
+        "--engage",
         action="store_true",
-        help="Review and publish up to five queued X replies",
+        help="Reply only to GraceFinance mentions and conversations",
     )
     parser.add_argument(
-        "--auto-approve-replies",
+        "--refresh-metrics",
         action="store_true",
-        help="Discover and publish queued X replies without prompting",
+        help="Refresh metrics for GraceFinance-owned X posts",
     )
     parser.add_argument(
         "--founder-report",
@@ -49,6 +53,18 @@ def main() -> None:
         help="Generate a weekly operations report and exit",
     )
     parser.add_argument(
+        "--post-type",
+        default="auto",
+        choices=[
+            "auto",
+            "daily_index",
+            "behavioral_insight",
+            "product_truth",
+            "founder_build",
+            "community_prompt",
+        ],
+    )
+    parser.add_argument(
         "--theme",
         default="manual GraceFinance update",
     )
@@ -56,11 +72,23 @@ def main() -> None:
     args = parser.parse_args()
 
     logger.info(
-        "GraceFinance Growth starting | env={} | dry_run={} | auto_approve_replies={}",
+        "GraceFinance Growth starting | env={} | dry_run={} | x_username={}",
         settings.app_env,
         settings.dry_run,
-        settings.auto_approve_replies,
+        settings.x_username,
     )
+
+    if args.publish_owned:
+        run_owned_content_cycle(args.post_type)
+        return
+
+    if args.engage:
+        run_allowed_engagement_cycle()
+        return
+
+    if args.refresh_metrics:
+        run_owned_metrics_cycle()
+        return
 
     if args.founder_report:
         run_founder_cycle()
@@ -68,20 +96,6 @@ def main() -> None:
 
     if args.weekly_report:
         run_weekly_cycle()
-        return
-
-    if args.auto_approve_replies:
-        run_autonomous_reply_cycle()
-        return
-
-    if args.discover_replies:
-        run_reply_discovery_cycle()
-        if not args.approve_replies:
-            return
-
-    if args.approve_replies:
-        store = ReplyStore(getattr(settings, "growth_database_path", "data/growth.db"))
-        approve_queue(store)
         return
 
     if args.run_once:
