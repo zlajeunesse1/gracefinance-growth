@@ -33,7 +33,6 @@ def start_scheduler() -> None:
         replace_existing=True,
         max_instances=1,
         coalesce=True,
-        next_run_time=None,
     )
     scheduler.add_job(
         run_allowed_engagement_cycle,
