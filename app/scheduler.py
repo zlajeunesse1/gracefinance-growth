@@ -9,6 +9,22 @@ from app.jobs.heartbeat import heartbeat
 from app.jobs.metrics_cycle import run_metrics_cycle
 from app.jobs.reply_discovery_cycle import run_reply_discovery_cycle
 from app.jobs.social_cycle import run_social_cycle
+from app.reply_assistant import ReplyStore, approve_queue
+
+
+def run_autonomous_reply_cycle() -> None:
+    settings = get_settings()
+    run_reply_discovery_cycle()
+
+    if not settings.auto_approve_replies:
+        logger.info("Reply discovery complete; AUTO_APPROVE_REPLIES is disabled")
+        return
+
+    if settings.dry_run:
+        logger.warning("AUTO_APPROVE_REPLIES is enabled but DRY_RUN is true; replies will not publish live")
+
+    store = ReplyStore(getattr(settings, "growth_database_path", "data/growth.db"))
+    approve_queue(store, auto_approve=True)
 
 
 def start_scheduler() -> None:
@@ -40,9 +56,9 @@ def start_scheduler() -> None:
         coalesce=True,
     )
     scheduler.add_job(
-        run_reply_discovery_cycle,
-        CronTrigger(hour=9, minute=30, timezone=settings.timezone),
-        id="daily_x_reply_discovery",
+        run_autonomous_reply_cycle,
+        IntervalTrigger(minutes=max(15, settings.engagement_interval_minutes)),
+        id="autonomous_x_reply_cycle",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
@@ -66,7 +82,10 @@ def start_scheduler() -> None:
     )
 
     logger.info(
-        "GraceFinance Signal Engine started | timezone={} cadence=1 weekly linked post + up to 5 approved replies daily",
+        "GraceFinance Signal Engine started | timezone={} reply_interval={}m auto_approve={} daily_reply_limit={}",
         settings.timezone,
+        max(15, settings.engagement_interval_minutes),
+        settings.auto_approve_replies,
+        5,
     )
     scheduler.start()
