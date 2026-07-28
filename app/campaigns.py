@@ -14,7 +14,7 @@ def _tracked_url(campaign_id: str) -> str:
             "utm_source": "x",
             "utm_medium": "organic",
             "utm_campaign": campaign_id,
-            "utm_content": "signal_engine",
+            "utm_content": "research_signal_engine",
         }
     )
     return f"{settings.gracefinance_site_url.rstrip('/')}/?{query}"
@@ -24,61 +24,75 @@ def build_candidates(snapshot: dict, theme: str, sequence: int = 1) -> list[Camp
     now = datetime.now(timezone.utc)
     latest = float(snapshot.get("latest") or 0)
     delta = float(snapshot.get("delta") or 0)
-    samples = int(snapshot.get("sample_count") or 0)
-    logged = int(snapshot.get("logged_in_count") or 0)
-    guests = int(snapshot.get("guest_count") or 0)
+    participants = int(snapshot.get("current_participants") or snapshot.get("sample_count") or 0)
+    returning = int(snapshot.get("returning_participants") or 0)
+    eligible = int(snapshot.get("eligible_submissions") or 0)
 
-    base_id = now.strftime("GFX-%Y%m%d")
+    base_id = now.strftime("GFR-%Y%m%d")
 
     specs = [
         (
-            "checkin",
-            "checkin-what-credit-misses-v1",
-            92,
-            "Directly converts curiosity into a check-in",
-            "Most people know their credit score.\n\nVery few know their Financial Confidence Score.\n\nGraceFinance measures what traditional financial tools miss.\n\nTake today's 60-second check-in: {url}",
+            "baseline",
+            "research-find-your-baseline-v1",
+            94,
+            "Low-friction invitation to establish an anonymous baseline",
+            "How secure do you actually feel about money right now?\n\nGraceFinance Research measures five financial-confidence signals. No account, name, bank connection or exact address.\n\nAdd your anonymous baseline: {url}",
         ),
         (
             "mission",
-            "mission-public-signal-v1",
-            88,
-            "Explains why each participation event matters",
-            "We're building a new public signal for personal finance.\n\nEvery GraceFinance check-in strengthens a proprietary dataset measuring how people actually feel about their financial lives.\n\nAdd your signal: {url}",
+            "research-open-panel-v1",
+            90,
+            "Explains the open research mission without claiming representativeness",
+            "We're building an open, longitudinal picture of financial confidence.\n\nParticipants answer five questions, receive a private score and can return to measure change over time.\n\nJoin the experimental panel: {url}",
         ),
         (
             "index",
-            "index-daily-pulse-v1",
-            80 + min(abs(delta) * 8, 18),
-            "Uses proprietary index movement",
-            "Today's Financial Confidence pulse:\n\nFCS: {latest:.2f}\nMove: {delta:+.2f}\nCheck-ins: {samples}\n\nYour check-in helps shape tomorrow's signal.\n\n{url}",
+            "research-index-pulse-v1",
+            82 + min(abs(delta) * 8, 16),
+            "Uses the current participant index with an explicit sample label",
+            "GraceFinance Participant Confidence Index: {latest:.1f}\nCurrent participants: {participants}\nReturning participants: {returning}\n\nExperimental voluntary-participant research, not a national statistic.\n\nAdd your signal: {url}",
         ),
         (
             "curiosity",
-            "curiosity-same-income-v1",
-            86,
-            "Creates a strong behavioral-finance curiosity gap",
-            "Two people can earn the same income and feel completely different about their finances.\n\nThat gap is what GraceFinance measures.\n\nSee your Financial Confidence Score: {url}",
+            "research-same-income-v1",
+            88,
+            "Creates a behavioral-finance curiosity gap",
+            "Two households can earn the same income and feel completely different about stability, control and emergency readiness.\n\nThat difference is what GraceFinance Research measures.\n\nFind your score: {url}",
         ),
         (
-            "product",
-            "product-new-look-v1",
-            84,
-            "Positions GraceFinance as a new financial lens",
-            "A budget shows where your money went.\n\nGraceFinance gives you a new look at where your financial life is heading.\n\nMeasure confidence, readiness, stability and financial agency in one check-in.\n\n{url}",
+            "privacy",
+            "research-no-profile-v1",
+            87,
+            "Addresses the main participation objection directly",
+            "Financial research usually asks for too much.\n\nGraceFinance asks five confidence questions and your state. No profile. No password. No bank connection. State results stay hidden until the privacy threshold is met.\n\nParticipate: {url}",
+        ),
+        (
+            "longitudinal",
+            "research-returning-panel-v1",
+            85 + min(returning / 10, 10),
+            "Emphasizes the unique value of repeated participant measurement",
+            "A one-time survey captures an opinion. Returning participants show how financial confidence changes.\n\nGraceFinance uses a signed anonymous browser identity so you can build a private trend without a profile.\n\nStart yours: {url}",
         ),
         (
             "participation",
-            "participation-live-dataset-v1",
-            76 + min(samples / 25, 12),
-            "Turns users into contributors to the dataset",
-            "{samples} financial check-ins are shaping today's GraceFinance signal.\n\n{logged} came from members and {guests} from guests.\n\nEvery response makes the dataset more useful.\n\nContribute yours: {url}",
+            "research-panel-growth-v1",
+            78 + min(participants / 25, 12),
+            "Turns participation into visible panel growth",
+            "{participants} current participants are shaping the GraceFinance research signal. {returning} have returned for another measurement.\n\nEvery eligible participant adds one current data point.\n\nContribute yours: {url}",
+        ),
+        (
+            "methodology",
+            "research-transparent-method-v1",
+            84,
+            "Builds trust through transparent limitations and versioning",
+            "GraceFinance records the questionnaire, scoring, consent and methodology version with every response. Bots, implausibly fast submissions and duplicate 24-hour responses are excluded from the public index.\n\nSee it and participate: {url}",
         ),
         (
             "question",
-            "question-confidence-trigger-v1",
-            74,
-            "Invites replies while reinforcing the mission",
-            "What is one financial habit that immediately makes you feel more confident?\n\nWe're measuring financial confidence every day through GraceFinance check-ins.\n\nAdd your data point: {url}",
+            "research-confidence-question-v1",
+            76,
+            "Invites discussion while connecting replies to the research question",
+            "Which matters most to financial confidence right now: stable bills, future income, purchasing power, emergency savings or control over decisions?\n\nGraceFinance Research measures all five anonymously: {url}",
         ),
     ]
 
@@ -89,9 +103,9 @@ def build_candidates(snapshot: dict, theme: str, sequence: int = 1) -> list[Camp
         text = template.format(
             latest=latest,
             delta=delta,
-            samples=samples,
-            logged=logged,
-            guests=guests,
+            participants=participants,
+            returning=returning,
+            eligible=eligible,
             url=url,
         )
         candidates.append(
@@ -99,11 +113,11 @@ def build_candidates(snapshot: dict, theme: str, sequence: int = 1) -> list[Camp
                 campaign_id=campaign_id,
                 category=category,
                 template_id=template_id,
-                goal="completed_checkin",
+                goal="completed_research_signal",
                 text=text,
                 tracked_url=url,
                 score=float(score),
-                reason=f"{reason}; theme={theme}",
+                reason=f"{reason}; theme={theme}; eligible_submissions={eligible}",
             )
         )
     return candidates
