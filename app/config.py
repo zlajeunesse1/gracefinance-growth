@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     timezone: str = "America/New_York"
 
     gracefinance_api_url: str = "https://gracefinance.co"
+    gracefinance_research_path: str = "/research/summary"
     gracefinance_index_path: str = "/index/raw-ohlc?range=1D"
     gracefinance_site_url: str = "https://gracefinance.co"
 
