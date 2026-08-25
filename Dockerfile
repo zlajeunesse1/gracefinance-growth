@@ -10,4 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "-m", "app.main"]
+# Product decision: keep the legacy X growth code available for reference,
+# but never start its posting/polling scheduler in a deployed container.
+CMD ["python", "-c", "print('GraceFinance X growth worker disabled by product decision')"]
